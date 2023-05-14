@@ -1,38 +1,48 @@
 import os
-import cv2
 import numpy as np
 import tensorflow as tf
-from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
 import matplotlib.pyplot as plt
 
-
-def load_images(path, label, size=(128, 128)):
+def load_images_and_labels(paths, labels, size=(128, 128)):
+    filepaths = [(os.path.join(path, filename), label) for path, label in zip(paths, labels) for filename in os.listdir(path)]
     images = []
-    labels = []
-    for filename in os.listdir(path):
-        img = cv2.imread(os.path.join(path, filename))
-        if img is not None:
-            img_resized = cv2.resize(img, size)
-            images.append(img_resized / 255.0)
-            labels.append(label)
-    return images, labels
+    image_labels = []
+
+    for (filepath, label) in filepaths:
+        try:
+            img = tf.io.read_file(filepath)
+            img = tf.image.decode_jpeg(img, channels=3)
+            img = tf.image.resize(img, size)
+            img = img / 255.0
+            images.append(img)
+            image_labels.append(label)
+        except Exception as e:
+            print(f"Error reading file {filepath}: {e}")
+            continue
+
+    return tf.data.Dataset.from_tensor_slices((images, image_labels))
+
+
 
 cats_path = 'PetImages/Cat'
 dogs_path = 'PetImages/Dog'
-cats_images, cats_labels = load_images(cats_path, 0)
-dogs_images, dogs_labels = load_images(dogs_path, 1)
+paths = [cats_path, dogs_path]
+labels = [0, 1]
 
-images = cats_images + dogs_images
-labels = cats_labels + dogs_labels
+dataset = load_images_and_labels(paths, labels)
 
-images, labels = shuffle(images, labels, random_state=42)
+dataset = dataset.shuffle(10000, seed=42)
 
-train_images, test_images, train_labels, test_labels = train_test_split(images, labels, test_size=0.2, random_state=42)
+total_size = len(dataset)
 
+train_size = int(0.8 * total_size)
+train_ds = dataset.take(train_size)
+test_ds = dataset.skip(train_size)
 
-# Definiendo el modelo usando TensorFlow:
+train_ds = train_ds.batch(64).prefetch(tf.data.AUTOTUNE)
+test_ds = test_ds.batch(64).prefetch(tf.data.AUTOTUNE)
 
+# Definiendo el modelo usando TensorFlow
 model = tf.keras.Sequential([
     tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 3)),
     tf.keras.layers.MaxPooling2D(2, 2),
@@ -48,15 +58,17 @@ model = tf.keras.Sequential([
 
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-history = model.fit(np.array(train_images), np.array(train_labels), epochs=15, validation_split=0.1, batch_size=64)
+# Agrega detención temprana
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3)
 
-# Evaluando el desempeño del modelo:
-test_loss, test_accuracy = model.evaluate(np.array(test_images), np.array(test_labels))
+# Entrena el modelo
+history = model.fit(train_ds, epochs=15, validation_data=test_ds, callbacks=[early_stopping])
+
+# Evaluando el desempeño del modelo
+test_loss, test_accuracy = model.evaluate(test_ds)
 print("Test accuracy:", test_accuracy)
 
-
 # Mostrando la evolución de las métricas durante las diferentes épocas
-
 def plot_metrics(history):
     plt.plot(history.history['accuracy'])
     plt.plot(history.history['val_accuracy'])
@@ -66,4 +78,7 @@ def plot_metrics(history):
     plt.legend(['Train', 'Validation'], loc='upper left')
     plt.show()
 
+plot_metrics(history)
 
+# Guarda el modelo entrenado
+model.save("cat_dog_classifier.h5")
