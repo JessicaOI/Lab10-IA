@@ -1,4 +1,6 @@
-Para comenzar a ejecutar este proyecto se debe asegurar que tiene descargada el dataset de imagenes de perros y gatos
+Para comenzar el github no me dejo subir el .h5 a entrenado porque pesaba mas de 100mb pero lo subi en el zip que subi en canvas para que no tengan que volver a correr todo el entrenamiento que si me tardo un buen rato para que entrenara.
+
+Pero si quisieran ejecutar el entrenamiento que seria el main.py se deben de asegurar que tiene descargada el dataset de imagenes de perros y gatos
 En la misma ubicacion que estan estos archivos colocar la carpeta llamada "PetImages"
 
 Para entrenar el agente IA ppara que reconozca una imagen de un perro o un gato se ejecuta el main.py
